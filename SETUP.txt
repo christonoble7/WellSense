@@ -1,0 +1,54 @@
+WELLSENSE FINAL (Android) - COMPLETE STEPS
+Needs: Windows PC, Node.js LTS, Android Studio (JDK 17), Python 3, Samsung/Android phone + data USB cable.
+
+PART 1  EXTRACT   Right-click WellSense-Final.zip > Extract All to a SHORT path, e.g. C:\WellSense
+                  (open the inner folder if there is one; you want the folder containing setup.js)
+
+PART 2  INSTALL   Node.js LTS (nodejs.org) | Android Studio (developer.android.com/studio, open once to finish SDK download)
+                  Python (python.org, tick "Add Python to PATH"), then:  pip install pandas scikit-learn
+
+PART 3  PHONE     Settings > About phone > Software information > tap Build number 7 times.
+                  Settings > Developer options > USB debugging ON. Plug in, choose File transfer, tap Allow.
+
+PART 4  TRAIN THE MODEL (do this for real results)
+   a) Get a heart-disease dataset. Any ONE of these works (train.py recognises all three layouts):
+        - Kaggle "Heart Disease" heart.csv (age, sex, cp, trestbps, chol, fbs ... target)
+        - Kaggle "Heart Failure Prediction" heart.csv (Age, Sex=M/F, RestingBP, Cholesterol, FastingBS ... HeartDisease)
+        - UCI "Heart Disease" processed.cleveland.data (no header row, '?' = missing)
+      Save it into the training folder.
+   b) Command Prompt:  cd C:\WellSense\training   then   python train.py yourfile.csv
+      It prints rows used, cross-validated AUC and test AUC. WRITE THESE DOWN for your slides.
+      If it says "Could not find columns", send the first line of your file to the developer.
+   c) Copy training\model-data.js into www\ (replace the existing file).
+      The shipped model is trained on FAKE data; the app warns about this in Settings until you replace it.
+
+PART 5  BUILD AND RUN
+   cd C:\WellSense
+   npm install
+   node setup.js              (adds plugins, permissions, Kotlin, Health Connect; ends with DONE)
+   npx cap open android       (Android Studio opens; wait for Gradle sync to finish)
+   Pick your phone in the device list > green Run button.
+   APK file instead: Build > Build Bundle(s)/APK(s) > Build APK(s) -> android\app\build\outputs\apk\debug\app-debug.apk
+   (send APKs via Google Drive; Gmail blocks them)
+
+PART 6  FIRST USE (do these so the report has content)
+   1. Create profile.
+   2. Body tab: enter or sync readings (resting HR, HRV, steps, sleep, SpO2) for at least 3 different days.
+      Baseline = your first 3 readings, so enter typical values first, then later ones are compared to them.
+   3. Body tab, blood report: fill TOTAL CHOLESTEROL, BP (both numbers) and GLUCOSE (needed by the trained model), plus LDL/HDL/TG/HbA1c if you have them.
+   4. Nutrition tab: log today's meals.
+   5. Mind tab: mood check-in, then "Sync phone usage now" > allow Usage access > back > sync again.
+   6. Body tab: "Sync wearable (Health Connect)" (works only if your watch app shares data to Health Connect:
+      Settings > Health Connect > App permissions. Huawei Health needs a bridge app such as Health Sync.)
+
+PART 7  REPORT
+   Insights tab > "View / export report" shows the summary on screen.
+   Tap "Export report as PDF" -> Android share sheet -> save to Drive / email / WhatsApp. The PDF contains score,
+   factor bar chart, 7-day trend, alerts, explanations, recommendations, latest blood values, model note, disclaimer.
+   "Export JSON" / "Export CSV" give raw data.
+
+UPDATING   After editing files in www\ :  npx cap sync android  then Run again.
+TROUBLE    Java error: Android Studio > Settings > Build Tools > Gradle > Gradle JDK = 17.
+           Other build error: copy the FIRST red line in the Build tab.
+HONEST LIMITS  Training happens on the PC, not the phone. Model uses 5 clinical features (not a diagnosis).
+           Screen time is approximate; typing speed is manual. Wearable sync depends on your watch app's Health Connect support.

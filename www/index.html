@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b2540"><meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json"><link rel="apple-touch-icon" href="icon-192.png">
+<title>WellSense</title>
+<style>
+:root{--bg:#f2f6fa;--card:#fff;--tx:#0b2540;--mu:#5b6f84;--pr:#0f9d8f;--nv:#0b2540;--bd:#dbe4ee;--ok:#16a34a;--wa:#d97706;--er:#dc2626;--sh:0 4px 14px rgba(11,37,64,.08)}
+[data-t=d]{--bg:#081a2e;--card:#0f2a47;--tx:#e8f0f8;--mu:#93a8bd;--bd:#1d3d5f;--pr:#2dd4bf;--sh:0 4px 14px rgba(0,0,0,.4)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--tx)}
+#app{max-width:430px;margin:auto;min-height:100vh;position:relative}
+main{padding:calc(12px + env(safe-area-inset-top)) 14px 96px;animation:f .25s}
+@keyframes f{from{opacity:0;transform:translateY(6px)}}
+h1{font-size:22px;margin:4px 0 12px}h2{font-size:16px;margin:0 0 8px}
+.c{background:var(--card);border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:var(--sh)}
+.hd{background:linear-gradient(135deg,#0b2540,#0f9d8f);color:#fff}
+.r{display:flex;gap:8px;align-items:center}.sp{justify-content:space-between}.w{flex-wrap:wrap}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mu{color:var(--mu);font-size:13px}.big{font-size:30px;font-weight:700}
+button,.b{min-height:46px;border:0;border-radius:12px;background:var(--pr);color:#fff;font:600 15px inherit;padding:0 16px;cursor:pointer}
+button.s{background:transparent;color:var(--pr);border:1.5px solid var(--pr)}button.d{background:var(--er)}button.sm{min-height:36px;padding:0 10px;font-size:13px}
+button.full{width:100%;margin-top:8px}
+label{display:block;font-size:12px;color:var(--mu);margin:6px 0 2px}
+input,select{width:100%;min-height:44px;border:1.5px solid var(--bd);border-radius:10px;padding:0 10px;font:inherit;background:var(--card);color:var(--tx)}
+.chip{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600;color:#fff}
+.ok{background:var(--ok)}.wa{background:var(--wa)}.er{background:var(--er)}
+.al{border-left:4px solid var(--wa);padding:8px 10px;margin:6px 0;background:rgba(217,119,6,.1);border-radius:8px;font-size:13px}
+.li{padding:10px;border-bottom:1px solid var(--bd);cursor:pointer}
+.em{text-align:center;color:var(--mu);padding:18px}
+nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;display:flex;background:var(--card);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav a{flex:1;text-align:center;padding:8px 0;font-size:11px;color:var(--mu);cursor:pointer}nav a span{display:block;font-size:20px}nav a.on{color:var(--pr);font-weight:700}
+.mood{font-size:30px;background:none;color:inherit;padding:0;min-height:48px;border-radius:12px;flex:1}.mood.on{background:var(--pr)}
+.tabs button{flex:1;min-height:36px;font-size:13px}
+.err{color:var(--er);font-size:13px;min-height:16px}
+svg text{fill:var(--mu);font-size:10px}
+@media print{nav,.np{display:none!important}body{background:#fff}.c{box-shadow:none;border:1px solid #ccc}}
+</style></head><body><div id="app"></div>
+<script src="model-data.js"></script>
+<script>
+/* ===== WellSense: on-device, explainable wellness scoring. No backend. ===== */
+const $=s=>document.querySelector(s),K='wellsense1';
+const cl=(x,a,b)=>Math.max(a,Math.min(b,x)),avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+const has=v=>v!=null&&v!==''&&!isNaN(v),num=id=>{const v=$('#'+id)?.value;return v===''||v==null?null:+v};
+const dstr=n=>{const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().slice(0,10)},today=()=>dstr(0);
+const rnd=(a,b)=>Math.round(a+Math.random()*(b-a));
+let S=null,tab='home',locked=false,sel=null,msg='',bodyRange=7,bodyKey='rhr',pinBuf='';
+try{S=JSON.parse(localStorage.getItem(K))}catch(e){}
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){alert('Storage full or blocked')}};
+const blank=p=>({p,pin:null,dark:false,units:'metric',usdaKey:'',usda:{},demo:false,food:[],body:[],blood:[],mind:[]});
+
+/* ---- Food database per 100 g: name,kcal,carb,protein,fat,sugar,sodium(mg),gPerPiece,gPerCup ---- */
+const FOODS=[['Roti (chapati)',297,46,9,7,1,320,40],['Steamed rice',130,28,2.7,.3,0,1,0,160],['Brown rice',123,26,2.7,1,0,4,0,160],['Idli',130,27,4,.4,1,200,40],['Plain dosa',168,29,4,3.7,1,250,80],['Dal (cooked)',116,20,7,.4,1,240,0,200],['Rajma curry',127,22,8,.5,2,200,0,200],['Chole (chickpea curry)',164,27,9,2.6,5,250,0,200],['Paneer',265,1.2,18,21,1,18,25],['Curd (dahi)',61,4.7,3.5,3.3,4.7,46,0,245],['Milk (whole)',61,4.8,3.2,3.3,5,43,0,240],['Egg (boiled)',155,1.1,13,11,1.1,124,50],['Chicken curry',150,5,15,7,2,350,0,200],['Fish curry',120,4,14,5,1,300,0,200],['Sambar',60,9,3,1.5,3,320,0,200],['Poha',130,25,2.6,2.5,1,220,0,180],['Upma',120,18,3,4,1,300,0,200],['Aloo paratha',260,36,6,10,2,380,80],['Biryani (chicken)',180,22,9,6,1,420,0,200],['Banana',89,23,1.1,.3,12,1,120],['Apple',52,14,.3,.2,10,1,180],['Mango',60,15,.8,.4,14,1,200],['Papaya',43,11,.5,.3,8,8,0,150],['Almonds',579,22,21,50,4,1,1.2],['Peanuts',567,16,26,49,4,18,0.8],['Oats (cooked)',71,12,2.5,1.5,0,49,0,240],['Bread (white)',265,49,9,3.2,5,491,30],['Samosa',262,24,3.5,17,2,420,60],['Gulab jamun',300,45,5,12,38,60,40],['Tea with milk & sugar',45,7,1.2,1.3,6.5,18,0,240],['Coffee (black)',2,0,.3,0,0,2,0,240],['Cooked spinach',23,3.6,3,.3,.4,70,0,180],['Salad (mixed veg)',20,4,1,.2,2,15,0,100],['Olive/cooking oil',884,0,0,100,0,0],['Chips (fried snack)',536,53,7,34,2,525,0,30]];
+const UN={g:1,cup:200,bowl:250,piece:50,tbsp:15,ml:1};
+const grams=(f,u,q)=>u==='piece'?q*(f[7]||50):u==='cup'?q*(f[8]||200):q*UN[u];
+const allFoods=()=>FOODS.concat(Object.values(S.usda).flat());
+
+/* ---- Baseline = mean of first 3 body readings (personal baseline) ---- */
+function BL(){const b=[...S.body].sort((x,y)=>x.d>y.d?1:-1).slice(0,3);if(b.length<2)return null;
+ const m=k=>avg(b.map(x=>x[k]).filter(has));return{rhr:m('rhr'),hrv:m('hrv'),sleep:m('sleep'),steps:m('steps')}}
+const tgtKcal=()=>{const p=S.p;let b=10*p.w+6.25*p.h-5*p.age+(p.sex==='F'?-161:5);b*=1.4;return Math.round(b+(p.goal==='lose'?-400:p.goal==='gain'?300:0))};
+const dayFood=d=>S.food.filter(x=>x.d===d),sum=(a,k)=>a.reduce((s,x)=>s+(+x[k]||0),0);
+const latestBlood=d=>[...S.blood].filter(x=>x.d<=d).sort((a,b)=>a.d<b.d?1:-1)[0];
+const stress=m=>m?cl(Math.round(20+m.screen*4+m.switches*.15+m.night*.3+(3-m.mood)*8),0,100):null;
+
+/* ---- Explainable score: base 70 + signed factor contributions (SHAP-style additive) ---- */
+function scoreFor(d){const F=[],add=(n,p,w)=>F.push({n,p:Math.round(p*10)/10,w}),base=BL();
+ const b=S.body.find(x=>x.d===d);
+ if(b){
+  if(base&&has(b.rhr)&&has(base.rhr)){const df=b.rhr-base.rhr;add('Resting heart rate',cl(-df*.75,-8,6),`Resting heart rate is ${Math.abs(df).toFixed(0)} bpm ${df>=0?'above':'below'} your baseline (${base.rhr.toFixed(0)} bpm).`)}
+  if(base&&has(b.hrv)&&has(base.hrv)){const r=b.hrv/base.hrv-1;add('HRV',cl(r*20,-8,6),`HRV is ${Math.abs(r*100).toFixed(0)}% ${r>=0?'higher':'lower'} than your baseline (${base.hrv.toFixed(0)} ms).`)}
+  if(has(b.sleep))add('Sleep',cl((b.sleep-7)*3+(has(b.sq)?(b.sq-3)*1.5:0),-10,5),`You slept ${b.sleep} h (target 7-9 h).`);
+  if(has(b.steps))add('Steps',cl((b.steps-7000)/1000*1.2,-6,6),`${b.steps} steps vs a 7,000 reference.`);
+  if(has(b.spo2))add('SpO2',b.spo2<95?-(95-b.spo2)*2:1,`Blood oxygen is ${b.spo2}% (normal ≥95%).`);
+  if(has(b.act))add('Activity minutes',cl((b.act-30)/10,-3,4),`${b.act} active minutes (goal 30+).`)}
+ const fo=dayFood(d);
+ if(fo.length){const k=sum(fo,'kcal'),t=tgtKcal(),na=sum(fo,'na'),su=sum(fo,'sug');
+  add('Calories',-Math.min(5,Math.abs(k-t)/t*12),`Intake ${Math.round(k)} kcal vs target ${t} kcal.`);
+  add('Sodium',na>2000?-Math.min(5,(na-2000)/400):1,`Sodium ${Math.round(na)} mg (limit ~2000 mg for heart health).`);
+  add('Sugar',su>50?-Math.min(5,(su-50)/10):1,`Sugar ${Math.round(su)} g (aim below 50 g).`)}
+ const bl=latestBlood(d);
+ if(bl){
+  const useM=!!(window.WS_MODEL&&has(bl.sys)&&has(bl.tc)&&has(bl.glu));if(useM)modelFactors(bl,add);
+  if(has(bl.ldl))add('LDL cholesterol',bl.ldl>=160?-8:bl.ldl>=130?-6:bl.ldl>=100?-3:2,`LDL is ${bl.ldl} mg/dL (optimal <100).`);
+  if(has(bl.hdl))add('HDL cholesterol',bl.hdl<40?-4:bl.hdl>=60?3:0,`HDL is ${bl.hdl} mg/dL (higher is protective).`);
+  if(has(bl.tg))add('Triglycerides',bl.tg>=200?-5:bl.tg>=150?-3:1,`Triglycerides ${bl.tg} mg/dL (normal <150).`);
+  if(has(bl.glu)&&!useM)add('Fasting glucose',bl.glu>=126?-6:bl.glu>=100?-3:1,`Fasting glucose ${bl.glu} mg/dL (normal <100).`);
+  if(has(bl.a1c))add('HbA1c',bl.a1c>=6.5?-6:bl.a1c>=5.7?-3:1,`HbA1c ${bl.a1c}% (normal <5.7%).`);
+  if(has(bl.sys)&&!useM)add('Blood pressure',bl.sys>=140?-7:bl.sys>=130?-4:bl.sys>=120?-1:2,`BP ${bl.sys}/${bl.dia||'?'} mmHg (normal <120/80).`)}
+ const m=S.mind.find(x=>x.d===d);
+ if(m){add('Mood',(m.mood-3)*2.5,`Mood check-in ${m.mood}/5.`);const st=stress(m);add('Stress estimate',-(st-40)/8,`Estimated stress ${st}/100 from phone-usage signals (indicative only).`)}
+ const tot=cl(Math.round(75+F.reduce((s,f)=>s+f.p,0)),0,100);return{score:tot,F,n:F.length}}
+/* Trained model (training/train.py -> model-data.js). Linear model: coef*(x-mean)/std is the exact SHAP value per feature. */
+function modelFactors(bl,add){const M=window.WS_MODEL,v={age:S.p.age,sex:S.p.sex==='M'?1:0,trestbps:bl.sys,chol:bl.tc,fbs:bl.glu>120?1:0},
+ N={age:'Age (model)',sex:'Sex (model)',trestbps:'Blood pressure (model)',chol:'Total cholesterol (model)',fbs:'Fasting glucose (model)'};
+ M.features.forEach((f,i)=>{const lp=M.coef[i]*(v[f]-M.mean[i])/M.std[i];add(N[f],(f==='age'||f==='sex')?cl(-lp*8,-3,3):cl(-lp*8,-8,8),`Trained heart-risk model: ${f==='fbs'?'glucose '+bl.glu:f==='sex'?'sex':N[f].replace(' (model)','').toLowerCase()+' '+v[f]} shifts risk by ${lp>=0?'+':''}${lp.toFixed(2)} (log-odds) vs an average patient.`)})}
+const recOf=n=>REC[n]||REC[n.replace(' (model)','')]||'Not modifiable. Focus on the other factors.';
+const REC={'Resting heart rate':'Prioritise recovery today: hydrate, limit caffeine, do 10 min slow breathing.','HRV':'Low HRV suggests under-recovery. Aim for an early night and a light activity day.','Sleep':'Fix a consistent bedtime; target 7-9 h and avoid screens 1 h before bed.','Steps':'Add two 15-minute walks (after lunch and dinner).','SpO2':'Repeated SpO2 below 95% deserves a doctor visit.','Activity minutes':'Build up to 30 min brisk activity daily.','Calories':'Adjust portions toward your calorie target.','Sodium':'Cut pickles, papad, packaged snacks and added salt.','Sugar':'Swap sweets/sweet tea for fruit or unsweetened options.','LDL cholesterol':'Reduce fried/ghee-heavy food; add oats, nuts, legumes; discuss with your doctor.','HDL cholesterol':'Regular aerobic exercise and healthy fats (nuts, fish) can raise HDL.','Triglycerides':'Limit refined carbs, sugar and alcohol.','Fasting glucose':'Prefer whole grains/millets; walk after meals.','HbA1c':'Follow up with a clinician on blood sugar control.','Blood pressure':'Reduce salt, manage stress, and recheck BP regularly.','Mood':'Take a short walk or talk to someone you trust.','Stress estimate':'Reduce late-night screen use and app-switching; schedule breaks.'};
+
+/* ---- Small SVG chart helpers (no external libs) ---- */
+function line(v,l,col='#0f9d8f'){v=v.map(x=>has(x)?+x:null);const ok=v.filter(has);if(ok.length<2)return'<div class="em">Not enough data yet</div>';
+ const W=340,H=130,mn=Math.min(...ok),mx=Math.max(...ok),r=mx-mn||1,X=i=>20+i*(W-30)/(v.length-1),Y=x=>H-22-(x-mn)/r*(H-40);
+ let pts=v.map((x,i)=>has(x)?X(i)+','+Y(x):null).filter(Boolean).join(' ');
+ return`<svg viewBox="0 0 ${W} ${H}" width="100%"><polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2.5"/>${v.map((x,i)=>has(x)?`<circle cx="${X(i)}" cy="${Y(x)}" r="3" fill="${col}"/>`:'').join('')}<text x="2" y="${Y(mx)+3}">${Math.round(mx)}</text><text x="2" y="${Y(mn)+3}">${Math.round(mn)}</text><text x="20" y="${H-5}">${l[0]}</text><text x="${W-45}" y="${H-5}">${l[l.length-1]}</text></svg>`}
+function ring(p,col,txt,sub){const R=48,C=2*Math.PI*R;return`<svg viewBox="0 0 120 120" width="120"><circle cx="60" cy="60" r="${R}" fill="none" stroke="rgba(128,150,170,.3)" stroke-width="11"/><circle cx="60" cy="60" r="${R}" fill="none" stroke="${col}" stroke-width="11" stroke-linecap="round" stroke-dasharray="${C*cl(p,0,1)} ${C}" transform="rotate(-90 60 60)"/><text x="60" y="62" text-anchor="middle" style="font-size:22px;font-weight:700;fill:currentColor">${txt}</text><text x="60" y="78" text-anchor="middle">${sub}</text></svg>`}
+function shap(F){if(!F.length)return'<div class="em">Add data to see factor contributions</div>';const s=[...F].sort((a,b)=>Math.abs(b.p)-Math.abs(a.p)),H=s.length*26+8,mid=190,sc=140/Math.max(8,...s.map(f=>Math.abs(f.p)));
+ return`<svg viewBox="0 0 340 ${H}" width="100%"><line x1="${mid}" x2="${mid}" y1="0" y2="${H}" stroke="#889" />${s.map((f,i)=>{const w=Math.abs(f.p)*sc,y=i*26+4;return`<rect x="${f.p>=0?mid:mid-w}" y="${y}" width="${Math.max(w,1)}" height="18" rx="4" fill="${f.p>=0?'#16a34a':'#dc2626'}"/><text x="${f.p>=0?mid-4:mid+4}" y="${y+13}" text-anchor="${f.p>=0?'end':'start'}">${f.n}</text><text x="${f.p>=0?mid+w+3:mid-w-3}" y="${y+13}" text-anchor="${f.p>=0?'start':'end'}" style="fill:currentColor">${f.p>0?'+':''}${f.p}</text>`}).join('')}</svg>`}
+const flag=(v,lo,hi,rev)=>!has(v)?'':(rev?(v<lo?['High risk','er']:v<hi?['Borderline','wa']:['Normal','ok']):(v>=hi?['High','er']:v>=lo?['Borderline','wa']:['Normal','ok']));
+const chip=f=>f?`<span class="chip ${f[1]}">${f[0]}</span>`:'';
+const fld=(id,l,t='number',v='',x='')=>`<div><label for="${id}">${l}</label><input id="${id}" type="${t}" ${t==='number'?'inputmode="decimal" step="any"':''} value="${v??''}" ${x}></div>`;
+const days=n=>Array.from({length:n},(_,i)=>dstr(n-1-i));
+
+/* ---- Demo data (flagged demo:1 so it can be toggled off) ---- */
+function loadDemo(){clearDemo();S.demo=true;const D=1;
+ days(30).forEach((d,i)=>{const bad=i>=27;S.body.push({d,demo:D,hr:rnd(68,88),rhr:rnd(60,64)+(bad?7:0),hrv:rnd(48,58)-(bad?14:0),steps:rnd(5500,10500),sleep:+(rnd(60,80)/10-(bad?1.2:0)).toFixed(1),sq:rnd(3,5)-(bad?1:0),spo2:rnd(96,99),act:rnd(20,60)});
+  S.mind.push({d,demo:D,mood:cl(rnd(3,5)-(bad?1:0),1,5),screen:+(rnd(30,70)/10).toFixed(1),switches:rnd(60,160),typing:rnd(35,55),night:rnd(5,60)+(bad?40:0)})});
+ const ex=[['Idli',3,'piece','breakfast'],['Sambar',1,'bowl','breakfast'],['Steamed rice',1,'bowl','lunch'],['Dal (cooked)',1,'bowl','lunch'],['Roti (chapati)',2,'piece','dinner'],['Chicken curry',1,'bowl','dinner'],['Apple',1,'piece','snack'],['Tea with milk & sugar',1,'cup','snack']];
+ days(7).forEach(d=>ex.forEach(e=>addFood(FOODS.find(f=>f[0]===e[0]),e[1],e[2],e[3],d,D)));
+ S.blood.push({d:dstr(75),demo:D,tc:218,ldl:142,hdl:41,tg:176,glu:104,a1c:5.8,sys:134,dia:86,hb:13.4},{d:dstr(35),demo:D,tc:205,ldl:128,hdl:44,tg:158,glu:99,a1c:5.7,sys:130,dia:84,hb:13.6},{d:dstr(3),demo:D,tc:192,ldl:116,hdl:48,tg:140,glu:96,a1c:5.6,sys:126,dia:82,hb:13.8});save()}
+const clearDemo=()=>{['food','body','blood','mind'].forEach(k=>S[k]=S[k].filter(x=>!x.demo));S.demo=false};
+function addFood(f,q,u,meal,d,demo){const g=grams(f,u,q),k=g/100;S.food.push({d,meal,name:f[0],g:Math.round(g),kcal:f[1]*k,c:f[2]*k,p:f[3]*k,f:f[4]*k,sug:f[5]*k,na:f[6]*k,demo})}
+
+/* ---- Views ---- */
+const hdr=(t,back)=>`<div class="r sp"><h1>${t}</h1>${back?`<button class="s sm np" onclick="go('${back}')">Back</button>`:''}</div>`;
+function home(){const d=today(),r=scoreFor(d),y=scoreFor(dstr(1)),col=r.score>=75?'#16a34a':r.score>=55?'#d97706':'#dc2626';
+ const b=S.body.find(x=>x.d===d)||[...S.body].sort((a,b)=>a.d<b.d?1:-1)[0],fo=dayFood(d),m=S.mind.find(x=>x.d===d),bl=latestBlood(d),al=alerts();
+ const wk=days(7).map(x=>scoreFor(x).score);
+ return`<div class="r sp"><h1>Hi, ${esc(S.p.name)} 👋</h1><button class="s sm" onclick="go('set')">⚙ Settings</button></div>
+ <div class="c hd"><div class="r sp"><div><div class="mu" style="color:#cfe">Cardiac Wellness Score</div><div class="big">${r.score}/100</div><div style="font-size:13px">${r.n?`Based on ${r.n} signals today`:'Add today\'s data for an accurate score'}${y.n&&r.n?` · ${r.score-y.score>=0?'▲':'▼'} ${Math.abs(r.score-y.score)} vs yesterday`:''}</div></div>${ring(r.score/100,'#fff',r.score,'score')}</div><button class="full" style="background:#fff;color:#0b2540" onclick="go('ins')">Why this score? →</button></div>
+ <div class="c"><h2>Key metrics</h2><div class="g2"><div>❤️ RHR <b>${b?.rhr??'–'}</b> bpm</div><div>〰 HRV <b>${b?.hrv??'–'}</b> ms</div><div>👟 Steps <b>${b?.steps??'–'}</b></div><div>😴 Sleep <b>${b?.sleep??'–'}</b> h</div><div>🔥 Calories <b>${Math.round(sum(fo,'kcal'))}</b>/${tgtKcal()}</div><div>🙂 Mood <b>${m?m.mood+'/5':'–'}</b></div><div>🩸 LDL <b>${bl?.ldl??'–'}</b></div><div>💓 BP <b>${bl?.sys?bl.sys+'/'+bl.dia:'–'}</b></div></div></div>
+ <div class="c"><h2>Alerts</h2>${al.length?al.map(a=>`<div class="al">${a}</div>`).join(''):'<div class="mu">No alerts. Keep it up!</div>'}</div>
+ <div class="c"><h2>Weekly score trend</h2>${line(wk,days(7).map(x=>x.slice(5)))}</div>`}
+function alerts(){const A=[],d=today(),b=[...S.body].sort((a,b)=>a.d<b.d?1:-1)[0],bl=latestBlood(d),base=BL();
+ if(b&&base&&b.rhr-base.rhr>=6)A.push(`Resting heart rate is ${Math.round(b.rhr-base.rhr)} bpm above your baseline.`);
+ if(b&&b.spo2<94)A.push('Low SpO2 reading. Recheck; seek care if it persists.');
+ if(b&&b.sleep<6)A.push('Short sleep detected (<6 h).');
+ if(bl){if(bl.ldl>=130)A.push('LDL cholesterol is high.');if(bl.sys>=130)A.push('Blood pressure is elevated.');if(bl.glu>=100)A.push('Fasting glucose above normal.')}
+ const k=sum(dayFood(d),'na');if(k>2000)A.push('Sodium intake today exceeds 2000 mg.');return A}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function food(){const d=today(),fo=dayFood(d),k=sum(fo,'kcal'),t=tgtKcal(),M=['breakfast','lunch','snack','dinner'];
+ const mac=[['Carbs','c','#0f9d8f',250],['Protein','p','#3b82f6',90],['Fat','f','#f59e0b',70]];
+ return`${hdr('Nutrition')}<div class="c"><div class="r">${ring(k/t,k>t*1.1?'#dc2626':'#0f9d8f',Math.round(k),'of '+t+' kcal')}<div style="flex:1">${mac.map(m=>{const v=sum(fo,m[1]);return`<div class="mu">${m[0]} ${v.toFixed(0)} g</div><div style="height:8px;background:var(--bd);border-radius:4px;margin-bottom:6px"><div style="height:8px;width:${cl(v/m[3]*100,0,100)}%;background:${m[2]};border-radius:4px"></div></div>`}).join('')}<div class="mu">Sugar ${sum(fo,'sug').toFixed(0)} g · Sodium ${sum(fo,'na').toFixed(0)} mg</div></div></div></div>
+ <div class="c"><h2>Add food</h2><input id="q" placeholder="Search e.g. dosa, dal, banana" oninput="srch()"><div id="res"></div><div id="selbox">${selForm()}</div></div>
+ ${M.map(m=>{const x=fo.filter(f=>f.meal===m);return`<div class="c"><div class="r sp"><h2>${m[0].toUpperCase()+m.slice(1)}</h2><span class="mu">${Math.round(sum(x,'kcal'))} kcal</span></div>${x.length?x.map(f=>`<div class="li r sp"><span>${esc(f.name)} · ${f.g} g</span><span>${Math.round(f.kcal)} kcal <button class="sm d" aria-label="delete" onclick="delFood(${S.food.indexOf(f)})">✕</button></span></div>`).join(''):'<div class="mu">Nothing logged</div>'}</div>`}).join('')}`}
+function srch(){const q=$('#q').value.trim().toLowerCase();if(!q){$('#res').innerHTML='';return}
+ const r=allFoods().filter(f=>f[0].toLowerCase().includes(q)).slice(0,6);
+ $('#res').innerHTML=r.map(f=>`<div class="li" onclick="pick('${esc(f[0]).replace(/'/g,"\\'")}')">${esc(f[0])} <span class="mu">${f[1]} kcal/100g</span></div>`).join('')||'<div class="mu" style="padding:8px">No match in built-in database.</div>';
+ if(S.usdaKey)$('#res').innerHTML+=`<button class="s full sm" onclick="usda()">Search USDA for "${esc(q)}"</button>`}
+function pick(n){sel=allFoods().find(f=>f[0]===n);$('#res').innerHTML='';$('#selbox').innerHTML=selForm()}
+function selForm(){if(!sel)return'';return`<div class="c" style="background:var(--bg)"><b>${esc(sel[0])}</b><div class="r"><div style="flex:1">${fld('qty','Quantity','number',1)}</div><div style="flex:1"><label>Unit</label><select id="unit">${Object.keys(UN).map(u=>`<option>${u}</option>`).join('')}</select></div></div><label>Meal</label><select id="meal"><option>breakfast</option><option>lunch</option><option>snack</option><option>dinner</option></select><div class="err" id="fe"></div><button class="full" onclick="logFood()">Add to diary</button></div>`}
+function logFood(){const q=num('qty');if(!(q>0)){$('#fe').textContent='Enter a quantity greater than 0.';return}
+ addFood(sel,q,$('#unit').value,$('#meal').value,today());sel=null;save();render()}
+const delFood=i=>{S.food.splice(i,1);save();render()};
+async function usda(){const q=$('#q').value.trim();if(S.usda[q]){$('#res').innerHTML='';S.usda[q].forEach(f=>$('#res').innerHTML+=`<div class="li" onclick="pick('${esc(f[0]).replace(/'/g,"\\'")}')">${esc(f[0])}</div>`);return}
+ $('#res').innerHTML='<div class="mu">Searching USDA…</div>';
+ try{const r=await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(q)}&pageSize=5&api_key=${encodeURIComponent(S.usdaKey)}`);if(!r.ok)throw 0;const j=await r.json();
+  const g=(f,id)=>(f.foodNutrients.find(n=>n.nutrientId===id)||{}).value||0;
+  S.usda[q]=(j.foods||[]).map(f=>['USDA: '+f.description.slice(0,40),g(f,1008),g(f,1005),g(f,1003),g(f,1004),g(f,2000),g(f,1093)]);save();srch();$('#res').innerHTML='';S.usda[q].forEach(f=>$('#res').innerHTML+=`<div class="li" onclick="pick('${esc(f[0]).replace(/'/g,"\\'")}')">${esc(f[0])}</div>`)}
+ catch(e){$('#res').innerHTML='<div class="err">USDA lookup failed (offline or invalid API key). Built-in foods still work.</div>'}}
+
+function body(){const b=[...S.body].sort((a,b)=>a.d<b.d?1:-1),ds=days(bodyRange),K={rhr:'Resting HR',hr:'Heart rate',hrv:'HRV',steps:'Steps',sleep:'Sleep h',spo2:'SpO2',act:'Active min'},bl=[...S.blood].sort((a,b)=>a.d<b.d?1:-1)[0];
+ const ser=ds.map(d=>S.body.find(x=>x.d===d)?.[bodyKey]),base=BL();
+ const bf=[['tc','Total chol.',200,240],['ldl','LDL',100,130],['hdl','HDL',40,60,1],['tg','Triglycerides',150,200],['glu','Fasting glucose',100,126],['a1c','HbA1c',5.7,6.5],['sys','Systolic BP',120,140],['hb','Hemoglobin',12,13,1]];
+ return`${hdr('Body')}<div class="c"><div class="r w tabs"><button class="${bodyRange==7?'':'s'}" onclick="bodyRange=7;render()">Week</button><button class="${bodyRange==30?'':'s'}" onclick="bodyRange=30;render()">Month</button></div><div class="r w" style="margin:8px 0">${Object.entries(K).map(([k,v])=>`<button class="sm ${bodyKey===k?'':'s'}" onclick="bodyKey='${k}';render()">${v}</button>`).join('')}</div>${line(ser,ds.map(x=>x.slice(5)))}${base&&has(base[bodyKey])?`<div class="mu">Your baseline ${K[bodyKey]}: ${base[bodyKey].toFixed(0)}</div>`:'<div class="mu">Baseline forms after your first 2-3 readings.</div>'}</div>
+ <div class="c"><h2>Log wearable data</h2><div class="g2">${fld('hr','Heart rate')}${fld('rhr','Resting HR')}${fld('hrv','HRV (ms)')}${fld('steps','Steps')}${fld('sleep','Sleep (h)')}${fld('sq','Sleep quality 1-5')}${fld('spo2','SpO2 %')}${fld('act','Active min')}</div><div class="err" id="be"></div><button class="full" onclick="logBody()">Save today's reading</button><button class="full" onclick="syncWear()">⌚ Sync wearable (Health Connect)</button><div class="mu" style="margin-top:6px">Reads what your watch app has shared to Health Connect. You can still type values by hand.</div></div>
+ <div class="c"><h2>History</h2>${b.length?b.slice(0,5).map(x=>`<div class="li">${x.d}: RHR ${x.rhr??'–'}, HRV ${x.hrv??'–'}, ${x.steps??'–'} steps, ${x.sleep??'–'} h sleep</div>`).join(''):'<div class="em">No readings yet. Log one or simulate a sync.</div>'}</div>
+ <div class="c"><h2>Blood report</h2>${bl?`<div class="mu">Latest: ${bl.d}</div>`+bf.map(f=>`<div class="r sp li"><span>${f[1]}: <b>${bl[f[0]]??'–'}</b></span>${chip(flag(bl[f[0]],f[2],f[3],f[4]))}</div>`).join('')+`<div class="li r sp"><span>BP: <b>${bl.sys}/${bl.dia}</b></span>${chip(flag(bl.sys,120,140))}</div><h2 style="margin-top:10px">LDL trend</h2>${line([...S.blood].sort((a,b)=>a.d>b.d?1:-1).map(x=>x.ldl),[...S.blood].sort((a,b)=>a.d>b.d?1:-1).map(x=>x.d.slice(5)),'#dc2626')}`:'<div class="em">No blood report yet</div>'}
+ <h2 style="margin-top:10px">Add report</h2><div class="g2">${fld('tc','Total chol.')}${fld('ldl','LDL')}${fld('hdl','HDL')}${fld('tg','Triglycerides')}${fld('glu','Fasting glucose')}${fld('a1c','HbA1c %')}${fld('sys','BP systolic')}${fld('dia','BP diastolic')}${fld('hb','Hemoglobin')}${fld('bd','Report date','date',today())}</div><div class="err" id="le"></div><button class="full" onclick="logBlood()">Save blood report</button></div>`}
+function logBody(){const o={d:today()};['hr','rhr','hrv','steps','sleep','sq','spo2','act'].forEach(k=>{const v=num(k);if(v!=null)o[k]=v});
+ if(Object.keys(o).length<2){$('#be').textContent='Enter at least one value.';return}
+ if((o.spo2&&(o.spo2<50||o.spo2>100))||(o.rhr&&(o.rhr<25||o.rhr>200))||(o.sleep&&(o.sleep<0||o.sleep>24))){$('#be').textContent='One of the values looks out of range. Please check.';return}
+ const i=S.body.findIndex(x=>x.d===o.d&&!x.demo);if(i>=0)S.body[i]={...S.body[i],...o};else S.body.push(o);save();render()}
+async function syncWear(){const HC=CAP&&CAP.Plugins&&CAP.Plugins.HealthConnectBridge;if(!HC){alert('Wearable sync works only in the Android app.');return}
+ try{const st=await HC.status();if(!st.available){alert(st.message);return}
+  const g=await HC.requestPermissions();if(!g.granted){alert('Health Connect permission was not granted.');return}
+  const r=await HC.readToday(),o={d:today()};['hr','rhr','hrv','steps','sleep','spo2','act'].forEach(k=>{if(r[k]!=null&&r[k]>0)o[k]=Math.round(r[k]*10)/10});
+  if(Object.keys(o).length<2){alert('Health Connect has no data for today. Sync your watch app first and make sure it shares data with Health Connect.');return}
+  const i=S.body.findIndex(x=>x.d===o.d&&!x.demo);if(i>=0)S.body[i]={...S.body[i],...o};else S.body.push(o);save();render();
+  alert('Synced: '+Object.keys(o).filter(k=>k!=='d').join(', '))}catch(e){alert('Sync failed: '+e.message)}}
+function simBody(){const o={d:today(),hr:rnd(65,90),rhr:rnd(58,68),hrv:rnd(40,62),steps:rnd(4500,11000),sleep:+(rnd(55,85)/10).toFixed(1),sq:rnd(2,5),spo2:rnd(95,99),act:rnd(15,70)};
+ S.body=S.body.filter(x=>x.d!==o.d);S.body.push(o);save();render()}
+function logBlood(){const o={d:$('#bd').value||today()};['tc','ldl','hdl','tg','glu','a1c','sys','dia','hb'].forEach(k=>{const v=num(k);if(v!=null)o[k]=v});
+ if(Object.keys(o).length<2){$('#le').textContent='Enter at least one blood value.';return}
+ if((o.sys&&!o.dia)||(o.dia&&!o.sys)){$('#le').textContent='Enter both systolic and diastolic BP.';return}
+ if((o.ldl&&o.ldl>400)||(o.hdl&&o.hdl>150)||(o.a1c&&o.a1c>20)){$('#le').textContent='A value looks out of range. Please check units.';return}
+ S.blood.push(o);save();render()}
+
+function mind(){const m=[...S.mind].sort((a,b)=>a.d<b.d?1:-1),t=S.mind.find(x=>x.d===today()),E=['😞','😕','😐','🙂','😄'],ds=days(14);
+ const st=t?stress(t):null,lab=st==null?'':st<35?['Low','ok']:st<65?['Moderate','wa']:['Elevated','er'];
+ return`${hdr('Mind')}<div class="c"><h2>How do you feel today?</h2><div class="r" id="moods">${E.map((e,i)=>`<button class="mood ${t?.mood===i+1?'on':''}" aria-label="mood ${i+1}" onclick="setMood(${i+1})">${e}</button>`).join('')}</div></div>
+ <div class="c"><h2>Phone-usage signals</h2><div class="g2">${fld('scr','Screen time (h)','number',t?.screen)}${fld('sw','App switches/h','number',t?.switches)}${fld('ty','Typing speed (wpm)','number',t?.typing)}${fld('ni','Night use (min)','number',t?.night)}</div><div class="err" id="me"></div><button class="full" onclick="logMind()">Save signals</button><button class="full" onclick="syncUsage()">📱 Sync phone usage now</button><div class="mu">Screen time, app switches and night use are read from Android. Typing speed stays manual.</div></div>
+ <div class="c"><h2>Mood &amp; stress estimate</h2>${t?`<div class="r sp"><span>Stress estimate: <b>${st}/100</b></span>${chip(lab)}</div>`:'<div class="em">Check in to see your estimate</div>'}<div class="mu" style="margin-top:6px">⚠ Indicative estimate from phone-usage signals using a simple weighted rule. It is <b>not a diagnosis</b>. Seek professional help if you feel distressed.</div></div>
+ <div class="c"><h2>Mood, last 14 days</h2>${line(ds.map(d=>S.mind.find(x=>x.d===d)?.mood),ds.map(x=>x.slice(5)),'#8b5cf6')}<h2 style="margin-top:8px">Stress estimate</h2>${line(ds.map(d=>stress(S.mind.find(x=>x.d===d))),ds.map(x=>x.slice(5)),'#d97706')}</div>`}
+function mrg(o){const i=S.mind.findIndex(x=>x.d===today());const n={...(i>=0?S.mind[i]:{d:today(),mood:3,screen:4,switches:100,typing:45,night:30}),...o,demo:undefined};if(i>=0)S.mind[i]=n;else S.mind.push(n);save();render()}
+const setMood=v=>mrg({mood:v});
+function logMind(){const o={screen:num('scr'),switches:num('sw'),typing:num('ty'),night:num('ni')};if(Object.values(o).some(v=>v==null||v<0)){$('#me').textContent='Fill all four signals with valid numbers.';return}mrg(o)}
+const simMind=()=>mrg({screen:+(rnd(25,80)/10).toFixed(1),switches:rnd(50,180),typing:rnd(30,60),night:rnd(0,90)});
+
+function ins(){const r=scoreFor(today());const neg=r.F.filter(f=>f.p<0).sort((a,b)=>a.p-b.p).slice(0,4);
+ return`${hdr('Insights')}<div class="c"><h2>Why this score? (${r.score}/100)</h2><div class="mu">Starts at 75 and each factor adds or subtracts points, like a SHAP-style additive explanation. Green raises your score, red lowers it.</div>${shap(r.F)}</div>
+ <div class="c"><h2>Explanations</h2>${r.F.length?[...r.F].sort((a,b)=>Math.abs(b.p)-Math.abs(a.p)).map(f=>`<div class="li">${f.p>=0?'🟢':'🔴'} <b>${f.n} (${f.p>0?'+':''}${f.p})</b><div class="mu">${f.w}</div></div>`).join(''):'<div class="em">No data for today. Log a reading, simulate a sync or load demo data.</div>'}</div>
+ <div class="c"><h2>Personalised recommendations</h2>${neg.length?neg.map(f=>`<div class="li"><b>${f.n}:</b> ${recOf(f.n)}</div>`).join(''):'<div class="mu">No negative factors today. Maintain your routine.</div>'}</div>
+ <button class="full" onclick="go('rep')">📄 View / export report</button>`}
+
+function rep(){const d=today(),r=scoreFor(d),bl=latestBlood(d),wk=days(7).map(x=>scoreFor(x).score);
+ return`${hdr('Report','ins')}<div class="c"><h2>WellSense summary</h2><div class="mu">${esc(S.p.name)}, ${S.p.age} y, ${S.p.sex==='F'?'Female':'Male'}, ${S.p.h} cm, ${S.p.w} kg · ${d}</div><p>Cardiac Wellness Score: <b>${r.score}/100</b></p>${shap(r.F)}<h2>7-day score trend</h2>${line(wk,days(7).map(x=>x.slice(5)))}<h2>Alerts</h2>${alerts().map(a=>`<div class="al">${a}</div>`).join('')||'<div class="mu">None</div>'}<h2>Recommendations</h2>${r.F.filter(f=>f.p<0).map(f=>`<div>• ${recOf(f.n)}</div>`).join('')||'<div class="mu">None</div>'}${bl?`<h2>Latest blood report (${bl.d})</h2><div class="mu">LDL ${bl.ldl??'–'}, HDL ${bl.hdl??'–'}, TG ${bl.tg??'–'}, Glucose ${bl.glu??'–'}, HbA1c ${bl.a1c??'–'}, BP ${bl.sys??'–'}/${bl.dia??'–'}</div>`:''}<p class="mu">Not a medical device. Wellness information only; consult a doctor for medical decisions.</p></div>
+ <div class="np"><button class="full" onclick="expPDF()">📄 Export report as PDF</button>${NAT?'':'<button class="s full" onclick="window.print()">🖨 Print this page</button>'}<button class="s full" onclick="expJSON()">⬇ Export JSON</button><button class="s full" onclick="expCSV()">⬇ Export CSV</button></div>`}
+const CAP=window.Capacitor,NAT=!!(CAP&&CAP.isNativePlatform&&CAP.isNativePlatform());
+async function dl(name,txt,type){
+ if(NAT){try{const P=CAP.Plugins,r=await P.Filesystem.writeFile({path:name,data:txt,directory:'CACHE',encoding:'utf8'});await P.Share.share({title:name,url:r.uri});}catch(e){alert('Export failed: '+e.message)}return}
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type}));a.download=name;document.body.appendChild(a);a.click();a.remove()}
+/* ---- Real phone-usage sync (custom Android plugin UsageTrackerPlugin.java) ---- */
+async function syncUsage(silent){const UT=CAP&&CAP.Plugins&&CAP.Plugins.UsageTracker;
+ if(!UT){if(!silent)alert('Phone-usage sync works only in the Android app.');return}
+ try{const g=await UT.hasAccess();if(!g.granted){if(!silent){alert('Allow "Usage access" for WellSense on the next screen, then come back and tap Sync again.');await UT.openSettings()}return}
+  const r=await UT.getToday();mrg({screen:r.screen,switches:r.switches,night:r.night,...(S.mind.find(x=>x.d===today())?{}:{typing:45})})}
+ catch(e){if(!silent)alert('Could not read usage: '+e.message)}}
+/* ---- Dependency-free PDF writer (A4, Helvetica, ASCII) + report builder ---- */
+function PDF(){const pg=[];let c,y;const MP={'•':'-','–':'-','—':'-','’':"'",'≥':'>=','≤':'<=','→':'->','▲':'^','▼':'v'};
+ const A=t=>String(t).replace(/[^\x20-\x7E]/g,h=>MP[h]||'').replace(/[\\()]/g,'\\$&'),f=n=>(+n).toFixed(2);
+ const o={add(){c=[];pg.push(c);y=800},need(h){if(y-h<50)o.add()},
+  text(x,t,sz=10,b=0,yy){c.push(`BT /F${b?2:1} ${sz} Tf ${f(x)} ${f(yy==null?y:yy)} Td (${A(t)}) Tj ET`)},
+  para(t,sz=10,b=0,x=40){const max=Math.floor(515/(sz*.52));let ln='';const out=[];A(t).replace(/\\(.)/g,'$1').split(/\s+/).forEach(w=>{if((ln+' '+w).trim().length>max){out.push(ln);ln=w}else ln=(ln+' '+w).trim()});if(ln)out.push(ln);out.forEach(l=>{o.need(sz+5);o.text(x,l,sz,b);y-=sz+4})},
+  gap(n){y-=n},get y(){return y},set y(v){y=v},
+  rect(x,yy,w,h,r,g,b){c.push(`${r} ${g} ${b} rg ${f(x)} ${f(yy)} ${f(w)} ${f(h)} re f 0 g`)},
+  poly(P,r,g,b){c.push(`${r} ${g} ${b} RG 2 w ${P.map((q,i)=>f(q[0])+' '+f(q[1])+(i?' l':' m')).join(' ')} S 0 G`)},
+  build(){const ob=[];ob[1]='<< /Type /Catalog /Pages 2 0 R >>';ob[2]=`<< /Type /Pages /Kids [${pg.map((_,i)=>(5+i*2)+' 0 R').join(' ')}] /Count ${pg.length} >>`;
+   ob[3]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';ob[4]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>';
+   pg.forEach((cc,i)=>{const t=cc.join('\n');ob[5+i*2]=`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${6+i*2} 0 R >>`;ob[6+i*2]=`<< /Length ${t.length} >>\nstream\n${t}\nendstream`});
+   let out='%PDF-1.4\n';const off=[];for(let i=1;i<ob.length;i++){off[i]=out.length;out+=`${i} 0 obj\n${ob[i]}\nendobj\n`}
+   const x=out.length;out+=`xref\n0 ${ob.length}\n0000000000 65535 f \n`+off.slice(1).map(v=>String(v).padStart(10,'0')+' 00000 n \n').join('')+`trailer\n<< /Size ${ob.length} /Root 1 0 R >>\nstartxref\n${x}\n%%EOF`;return out}};
+ o.add();return o}
+function reportPDF(){const d=today(),r=scoreFor(d),p=PDF(),bl=latestBlood(d),dd=days(7),wk=dd.map(x=>scoreFor(x).score),al=alerts();
+ p.text(40,'WellSense Wellness Report',20,1);p.y-=24;
+ p.para(`${S.p.name}, ${S.p.age} y, ${S.p.sex==='F'?'Female':'Male'}, ${S.p.h} cm, ${S.p.w} kg  |  ${d}`,10);p.gap(8);
+ p.text(40,`Cardiac Wellness Score: ${r.score} / 100`,16,1);p.y-=20;
+ p.para(`Computed on-device from ${r.n} signals. Starts at 75; each factor adds or subtracts points (SHAP-style additive explanation). Heart-risk factors use a trained model; the rest are rule-based and compared with your personal baseline.`,9);p.gap(8);
+ p.text(40,'Why this score? (points)',12,1);p.y-=18;
+ const F=[...r.F].sort((a,b)=>Math.abs(b.p)-Math.abs(a.p)),mid=330,sc=140/Math.max(8,...F.map(x=>Math.abs(x.p)));
+ if(!F.length)p.para('No data for today yet.',10);
+ F.forEach(x=>{p.need(16);const w=Math.abs(x.p)*sc;p.rect(x.p>=0?mid:mid-w,p.y-3,Math.max(w,1),10,...(x.p>=0?[.09,.64,.29]:[.86,.15,.15]));p.text(40,x.n,9);p.text(510,(x.p>0?'+':'')+x.p,9,1);p.y-=15});
+ p.gap(8);p.need(110);p.text(40,'7-day score trend',12,1);p.y-=14;
+ const mn=Math.min(...wk),mx=Math.max(...wk),rg=mx-mn||1,y0=p.y-70;
+ p.poly(wk.map((v,i)=>[50+i*80,y0+(v-mn)/rg*60]),.06,.62,.56);dd.forEach((x,i)=>p.text(38+i*80,x.slice(5)+': '+wk[i],8,0,y0-12));p.y=y0-26;
+ p.need(40);p.text(40,'Alerts',12,1);p.y-=16;if(al.length)al.forEach(a=>p.para('- '+a,10));else p.para('None.',10);p.gap(6);
+ p.need(40);p.text(40,'Explanations',12,1);p.y-=16;F.forEach(x=>p.para(`- ${x.n} (${x.p>0?'+':''}${x.p}): ${x.w}`,9));p.gap(6);
+ p.need(40);p.text(40,'Recommendations',12,1);p.y-=16;const neg=F.filter(x=>x.p<0);if(neg.length)neg.forEach(x=>p.para(`- ${x.n}: ${recOf(x.n)}`,9));else p.para('No negative factors today. Maintain your routine.',9);p.gap(6);
+ if(bl){p.need(60);p.text(40,`Latest blood report (${bl.d})`,12,1);p.y-=16;p.para(`Total chol ${bl.tc??'-'}, LDL ${bl.ldl??'-'}, HDL ${bl.hdl??'-'}, TG ${bl.tg??'-'}, glucose ${bl.glu??'-'}, HbA1c ${bl.a1c??'-'}, BP ${bl.sys??'-'}/${bl.dia??'-'}, Hb ${bl.hb??'-'}`,9);p.gap(6)}
+ const m=window.WS_MODEL&&WS_MODEL.metrics;if(m){p.need(40);p.text(40,'Model note',12,1);p.y-=16;p.para(m.synthetic_data?'WARNING: the heart-risk model was trained on SYNTHETIC stand-in data. Retrain on real data before relying on it.':`Heart-risk model: logistic regression on ${m.rows} records, test AUC ${m.test_auc}, accuracy ${m.test_accuracy}. Population-level estimate, not a diagnosis.`,9)}
+ p.gap(10);p.para('Not a medical device. WellSense provides indicative wellness information only and does not diagnose, treat or prevent any disease. Consult a doctor for medical decisions.',8);
+ return p.build()}
+async function expPDF(){try{const pdf=reportPDF(),name='WellSense-Report-'+today()+'.pdf';
+ if(NAT){const P=CAP.Plugins,r=await P.Filesystem.writeFile({path:name,data:btoa(pdf),directory:'CACHE'});await P.Share.share({title:name,url:r.uri})}
+ else{const u=new Uint8Array(pdf.length);for(let i=0;i<pdf.length;i++)u[i]=pdf.charCodeAt(i);const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([u],{type:'application/pdf'}));a.download=name;document.body.appendChild(a);a.click();a.remove()}}
+ catch(e){alert('PDF export failed: '+e.message)}}
+const expJSON=()=>dl('wellsense-data.json',JSON.stringify(S,null,1),'application/json');
+function expCSV(){const k=['d','hr','rhr','hrv','steps','sleep','sq','spo2','act'];dl('wellsense-body.csv',[k.join(',')].concat(S.body.map(x=>k.map(c=>x[c]??'').join(','))).join('\n'),'text/csv')}
+
+function set(){return`${hdr('Settings','home')}<div class="c"><label>Units</label><select id="un" onchange="S.units=this.value;save()"><option value="metric" ${S.units=='metric'?'selected':''}>Metric (kg, cm)</option><option value="imperial" ${S.units=='imperial'?'selected':''}>Imperial (not yet applied)</option></select>
+ <div class="r sp" style="margin-top:10px"><span>Dark mode</span><button class="sm" onclick="S.dark=!S.dark;save();render()">${S.dark?'On':'Off'}</button></div>
+ <div class="r sp" style="margin-top:10px"><span>Demo data</span><button class="sm" onclick="S.demo?clearDemo():loadDemo();save();render()">${S.demo?'Remove demo':'Load demo'}</button></div></div>
+ <div class="c"><h2>PIN lock</h2>${fld('pin','4-digit PIN','password','',`maxlength="4" inputmode="numeric"`)}<div class="err" id="pe"></div><button class="full" onclick="setPin()">Set PIN</button>${S.pin?'<button class="s full" onclick="S.pin=null;save();render()">Remove PIN</button>':''}</div>
+ <div class="c"><h2>USDA FoodData Central (optional)</h2>${fld('uk','API key','text',S.usdaKey)}<button class="full" onclick="S.usdaKey=$('#uk').value.trim();save();render()">Save key</button><div class="mu">Needs internet. Results are cached for offline reuse.</div></div>
+ <div class="c"><h2>Data</h2><button class="s full" onclick="expJSON()">Export all data (JSON)</button><button class="d full" onclick="if(confirm('Delete ALL data and profile?')){localStorage.removeItem(K);S=null;render()}">Reset / clear all data</button></div>
+ <div class="c"><h2>Heart-risk model</h2><div class="mu">${window.WS_MODEL?(WS_MODEL.metrics.synthetic_data?'⚠ Trained on SYNTHETIC stand-in data. Retrain on real data with training/train.py.':'Trained on '+WS_MODEL.metrics.rows+' records.')+' Test AUC '+WS_MODEL.metrics.test_auc+'. Features: age, sex, BP, cholesterol, glucose.':'No model loaded; rule-based scoring only.'}</div></div><div class="c"><h2>About</h2><div class="mu">WellSense v1.0, explainable multimodal wellness monitoring (B.Tech seminar CDQ 413). All data stays on this device. Scores use transparent rule-based weighting compared with your own baseline.<br><b>Not a medical device.</b> It does not diagnose, treat or prevent any disease. Wearable and phone signals can be simulated.</div></div>`}
+function setPin(){const p=$('#pin').value;if(!/^\d{4}$/.test(p)){$('#pe').textContent='PIN must be exactly 4 digits.';return}S.pin=btoa(p);save();render()}
+
+/* ---- Onboarding & lock ---- */
+function onboard(){$('#app').innerHTML=`<main><h1 style="color:var(--pr)">WellSense</h1><div class="mu">Explainable AI for personalised wellness. Create your local profile. Data never leaves this device.</div><div class="c" style="margin-top:12px">${fld('nm','Name','text')}<div class="g2">${fld('ag','Age')}<div><label>Sex</label><select id="sx"><option value="M">Male</option><option value="F">Female</option></select></div>${fld('ht','Height (cm)')}${fld('wt','Weight (kg)')}</div><label>Goal</label><select id="gl"><option value="maintain">Maintain health</option><option value="lose">Lose weight</option><option value="gain">Gain weight</option></select>${fld('pn','Optional 4-digit PIN','password','','maxlength="4" inputmode="numeric"')}<div class="err" id="oe"></div><button class="full" onclick="doOnb()">Get started</button></div></main>`}
+function doOnb(demo){const n=$('#nm').value.trim(),a=num('ag'),h=num('ht'),w=num('wt'),pn=$('#pn').value,e=$('#oe');
+ if(!n)return e.textContent='Please enter your name.';if(!(a>=10&&a<=100))return e.textContent='Age must be 10-100.';if(!(h>=100&&h<=230))return e.textContent='Height must be 100-230 cm.';if(!(w>=25&&w<=250))return e.textContent='Weight must be 25-250 kg.';if(pn&&!/^\d{4}$/.test(pn))return e.textContent='PIN must be 4 digits.';
+ S=blank({name:n,age:a,sex:$('#sx').value,h,w,goal:$('#gl').value});if(pn)S.pin=btoa(pn);if(demo)loadDemo();save();render()}
+function lock(){$('#app').innerHTML=`<main style="text-align:center;padding-top:80px"><h1>🔒 WellSense</h1><div class="mu">Enter your PIN</div><div class="c" style="margin-top:16px"><input id="lp" type="password" maxlength="4" inputmode="numeric" style="text-align:center;font-size:24px" oninput="if(this.value.length==4){if(btoa(this.value)===S.pin){locked=false;render()}else{$('#le2').textContent='Wrong PIN';this.value=''}}"><div class="err" id="le2"></div></div></main>`}
+
+const go=t=>{tab=t;scrollTo(0,0);render()};
+function render(){document.documentElement.dataset.t=S?.dark?'d':'l';if(!S||!S.p)return onboard();if(locked)return lock();
+ const N=[['home','🏠','Home'],['food','🍎','Nutrition'],['body','💓','Body'],['mind','🧠','Mind'],['ins','📊','Insights']];
+ const V={home,food,body,mind,ins,set,rep};$('#app').innerHTML=`<main>${V[tab]()}</main><nav>${N.map(n=>`<a class="${tab===n[0]?'on':''}" onclick="go('${n[0]}')"><span>${n[1]}</span>${n[2]}</a>`).join('')}</nav>`}
+if(typeof document!=='undefined'){locked=!!(S&&S.pin);render();if(S&&S.p&&!locked)syncUsage(true);if('serviceWorker' in navigator)navigator.serviceWorker.register('service-worker.js').catch(()=>{})}
+</script></body></html>
